@@ -856,7 +856,6 @@ class Controls:
     self.CS_prev = CS
     return CS, CC
     
-   
   def controlsd_thread(self):
     KS = car.CarState.new_message()
     KC = car.CarState.new_message()
@@ -864,7 +863,7 @@ class Controls:
     contador = 0
     separator = "\t"
     my_date = datetime.fromtimestamp(time.time())
-    doc = open("/openpilot/selfdrive/controls/logs/data_"+my_date.strftime("%Y%m%d_%H%M")+".txt",'a')
+    doc = open("../controls/logs/data_"+my_date.strftime("%Y%m%d_%H%M")+".txt",'a')
     doc.write("Time: "+separator+"vEgo: "+separator+"hudControl setSpeed:"+separator+"LoC v_pid"+separator+"State"+"\n")
     while True:
       KS, KC = self.step()
@@ -876,11 +875,9 @@ class Controls:
         doc.write(str(dt)[:9]+separator+str(KS.vEgo)[:8]+separator+str(KC.hudControl.setSpeed)[:8]+separator+str(self.LoC.v_pid)[:8]+separator+str(self.LoC.long_control_state)[:8]+"\n")
       contador = contador + 1 
 
-
 def main(sm=None, pm=None, logcan=None):
   controls = Controls(sm, pm, logcan)
   controls.controlsd_thread()
-
 
 if __name__ == "__main__":
   main()

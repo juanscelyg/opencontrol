@@ -10,10 +10,10 @@ import time
 
 # WARNING: this value was determined based on the model's training distribution,
 #          model predictions above this speed can be unpredictable
-V_CRUISE_MAX = 30  # kph
-V_CRUISE_MIN = 8  # kph
+V_CRUISE_MAX = 80  # kph
+V_CRUISE_MIN = 1  # kph
 V_CRUISE_ENABLE_MIN = 5.0  # kph
-V_CRUISE_INITIAL = 100  # kph
+V_CRUISE_INITIAL = 40  # kph
 IMPERIAL_INCREMENT = 1.6  # should be CV.MPH_TO_KPH, but this causes rounding errors
 
 MIN_SPEED = 1.0
@@ -71,13 +71,14 @@ class VCruiseHelper:
         #self.v_cruise_kph = 20.0
         #self.v_cruise_cluster_kph = 20.0
       #------------------------------------------
-      self.v_cruise_kph=30.0
+      self.v_cruise_kph=V_CRUISE_MAX
       if self.flag==True:
         self.cont=0
         self.t_ini = time.time_ns()
-        self.v_cruise_kph=30.0
+        self.v_cruise_kph=V_CRUISE_MAX
         self.flag=False
       dt=(time.time_ns()-self.t_ini)/1000000
+      '''
       if dt>60000 and dt<90000:
         self.v_cruise_kph=7.5
       else:
@@ -85,6 +86,7 @@ class VCruiseHelper:
       if dt>120000:
         self.v_cruise_kph=15.0
       #------------------------------------------
+      '''
     else:
       self.v_cruise_kph = V_CRUISE_INITIAL
       self.v_cruise_cluster_kph = V_CRUISE_INITIAL

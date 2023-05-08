@@ -3,11 +3,15 @@ from common.numpy_fast import clip, interp
 from common.realtime import DT_CTRL, sec_since_boot
 from selfdrive.controls.lib.drive_helpers import CONTROL_N, apply_deadzone
 from selfdrive.controls.lib.pid import PIDController
+
+from selfdrive.controls.lib.vel_planner import planner, TRAPEZOIDAL
+
 from selfdrive.modeld.constants import T_IDXS
 
 from datetime import datetime # modificado por JC
 import random # modificado por JC
 import time # modificado por JC
+
 
 LongCtrlState = car.CarControl.Actuators.LongControlState
 
@@ -73,6 +77,9 @@ class LongControl:
     self.vpid_flag = True # modificado por JC
     self.t_ini = time.time_ns() # modificado por JC
 
+    # Parametros para los planificadores
+    self.vel_profile = planner(TRAPEZOIDAL) #modificado por JC
+
   def reset(self, v_pid):
     """Reset PID controller and change setpoint"""
     self.pid.reset()
@@ -109,14 +116,10 @@ class LongControl:
     output_accel = self.last_output_accel
 
     if self.vpid_flag:
-      self.cont=0
       #self.v_ini = CS.vEgo
       self.v_pid = 0.0 #0.0
       self.vpid_flag=False
-    dt=(time.time_ns()-self.t_ini)/1000000
-    if dt>90000 and dt<120000:
-      v_target_1sec=8.0 #30
-
+    dt=(time.time_ns()-self.t_ini)/1000000000.0 # Diferencial de tiempo en segundos
 
     self.long_control_state = long_control_state_trans(self.CP, active, self.long_control_state, CS.vEgo,
                                                        v_target, v_target_1sec, CS.brakePressed,
@@ -139,33 +142,7 @@ class LongControl:
 
     elif self.long_control_state == LongCtrlState.pid:
 
-      if dt<30000:
-        self.v_pid=4.0
-      if dt>30000 and dt<60000:
-        self.v_pid=12.0 #45
-      if dt>60000 and dt<90000:
-        #self.long_control_state = LongCtrlState.stopping
-        self.v_pid=0.0 
-      if dt>90000:
-        self.v_pid=8.0 #30
-
-      #if self.cont%3000==0:
-        #my_range = random.randint(1, 5)
-        #self.v_delta = (-1.0)*my_range*(self.v_delta/abs(self.v_delta))
-        #self.v_delta = (-1.0)*(1.5)*(self.v_delta/abs(self.v_delta))
-        #self.v_ini = CS.vEgo
-        #self.pendiente = (-1.0)*(0.4)*(self.pendiente/abs(self.pendiente))
-        #self.cont = 0
-      #self.v_pid = self.v_delta + self.v_ini
-      #self.v_pid = self.pendiente * DT_CTRL * self.cont + self.v_ini
-      '''
-       if self.v_pid<0.0:
-        self.v_pid=0.0
-      if self.v_pid>15.0:
-        self.v_pid=15.0     
-      '''
-
-      #self.cont+=1
+      self.v_pid = self.vel_profile.update(dt)
       
       # Toyota starts braking more when it thinks you want to stop
       # Freeze the integrator so we don't accelerate to compensate, and don't allow positive acceleration
