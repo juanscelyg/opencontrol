@@ -1,36 +1,40 @@
-%************* Datos de un PT**************
-% El PT asume una acelaracion predefinida (a  [m/s^2]) dada en valor absoluto
-% V: Velocidad deseada, en [km/h]
-%    Su manejo en las ecuaciones es [m/s]
-% T: Tiempo de desarrollo del perfil  [s]
-% TD: Tiempo de descanso despues de finalizar el PT [s]
-% t: variable para el manejo del tiempo en segundos [s]
+%************* Datos de un Tramo   **************
+% TR = [V T]
+% Se asume una acelaracion predefinida [a: m/s^2] en valor absoluto
+% V: Velocidad objetivo en [km/h]
+% T: Tiempo de desarrollo [s]
+clear all
+global a dt v0;   % Aceleracion [m/s^2], tiempo de muestreo en [s] 
+                  % Velocidad inicial en [km/h]
+a = 1; dt = 0.25;
 
-clear
-close all
-global a;             % Aceleración   m/s^2
+v0=0; 
+TR1 = [v0 10]; 
+TR2 = [10 10];    
+TR3 = [0 20];   
+TR4 = [15 10];   
+TR5 = [30 20]; 
+TR6 = [0 10]; 
 
-a = 1;
-PT1 = [0 5 5];      % Especificacion de un perfil
-PT2 = [20 30 20];    
-PT3 = [15 30 5];    
+t0=0; 
+[t1 v1] = Trapezoidal(TR1, t0);
+t0 = t0 + TR1(2);
+[t2 v2] = Trapezoidal(TR2, t0);
+t0 = t0 + TR2(2);
+[t3 v3] = Trapezoidal(TR3, t0);
+t0 = t0 + TR3(2);
+[t4 v4] = Trapezoidal(TR4, t0);
+t0 = t0 + TR4(2);
+[t5 v5] = Trapezoidal(TR5, t0);
+t0 = t0 + TR5(2);
+[t6 v6] = Trapezoidal(TR6, t0);
 
-dt = 0.25;            %tiempo muestreo
-t0=0;
-[t1 v1] = Trapezoidal(PT1, dt, t0);
-
-t0 = t0 + PT1(2) + PT1(3);
-[t2 v2] = Trapezoidal(PT2, dt, t0);
-
-t0 = t0 + PT2(2) + PT2(3);
-[t3 v3] = Trapezoidal(PT3, dt, t0);
-t = [t1 t2 t3]'; v = [v1 v2 v3]';
-
+t = [t1 t2 t3 t4 t5 t6]';
+v = [v1 v2 v3 v4 v5 v6]';
 Data = [t v];
 plot(t, 3.6*v); 
 ylabel('Vel. (Km/h)')
 xlabel('Time (s)')
-grid
+grid on
 
-d=string(datetime('now','InputFormat','yyyy-MM-dd HH:mm'));
-writematrix(Data, "perfil_trapezoidal.csv");
+writematrix(Data, "../controls/tests/perfil_trapezoidal.csv");

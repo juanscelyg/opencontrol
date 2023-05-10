@@ -1,21 +1,12 @@
 from cereal import car
 from common.numpy_fast import clip, interp
-from common.realtime import DT_CTRL, sec_since_boot
+from common.realtime import DT_CTRL
 from selfdrive.controls.lib.drive_helpers import CONTROL_N, apply_deadzone
 from selfdrive.controls.lib.pid import PIDController
 from selfdrive.modeld.constants import T_IDXS
 
 LongCtrlState = car.CarControl.Actuators.LongControlState
 
-### -----------------------------
-#
-# Modificacion JC
-#
-### -----------------------------
-import time 
-
-LINEAL = 1
-TRAPEZOIDAL = 5
 
 def long_control_state_trans(CP, active, long_control_state, v_ego, v_target,
                              v_target_1sec, brake_pressed, cruise_standstill):
@@ -27,7 +18,7 @@ def long_control_state_trans(CP, active, long_control_state, v_ego, v_target,
                   not accelerating)
   stay_stopped = (v_ego < CP.vEgoStopping and
                   (brake_pressed or cruise_standstill))
-  stopping_condition = False #planned_stop or stay_stopped
+  stopping_condition = planned_stop or stay_stopped
 
   starting_condition = (v_target_1sec > CP.vEgoStarting and
                         accelerating and
@@ -61,46 +52,6 @@ def long_control_state_trans(CP, active, long_control_state, v_ego, v_target,
   return long_control_state
 
 
-class planner:
-    # vel_vector: vector de velocidades deseadas
-    # time_vector: vector de tiempos de cambio deseados
-    # tipo: tipo de suavizado y transición entre velocidades
-    def __init__(self,tipo):
-        # --- Variables
-        self.tipo = tipo
-        self.vel_vector = []
-        self.time_vector = []
-        self.separator=','
-        if self.tipo == 5:
-            self.archivo = '../controls/tests/perfil_trapezoidal.csv'
-            with open(self.archivo, 'r') as _archivo:
-                for linea in _archivo:
-                    linea = linea.rstrip()
-                    lista=linea.split(self.separator)
-                    self.time_vector.append(float(lista[0]))
-                    self.vel_vector.append(float(lista[1]))
-        # Velocidades y aceleraciones        
-        self.t_a = 10000.0
-        self.acc_max = 0.001
-        self.stage = 0
-        self.cont=1
-        self.change_stage = False
-        
-    #time: tiempo actual de simulación en segundos
-    def update(self, time):  
-        if self.tipo==5:
-            vel=self.read_trapezoidal(time)
-        else:
-            vel=0.0
-        return vel
-
-    #time: tiempo actual de simulación en segundos
-    def read_trapezoidal(self, t):
-        longitud=len(self.time_vector)
-        if t>self.time_vector[self.cont] and t<self.time_vector[longitud-1]:
-            self.cont+=1
-        return self.vel_vector[self.cont]
-
 class LongControl:
   def __init__(self, CP):
     self.CP = CP
@@ -108,17 +59,13 @@ class LongControl:
     self.pid = PIDController((CP.longitudinalTuning.kpBP, CP.longitudinalTuning.kpV),
                              (CP.longitudinalTuning.kiBP, CP.longitudinalTuning.kiV),
                              k_f=CP.longitudinalTuning.kf, rate=1 / DT_CTRL)
-    self.v_pid = 0.0 
+    self.v_pid = 0.0
     self.last_output_accel = 0.0
-    self.vpid_flag = True
-    self.t_ini = time.time_ns()
-    self.vel_profile = planner(TRAPEZOIDAL) 
 
   def reset(self, v_pid):
     """Reset PID controller and change setpoint"""
     self.pid.reset()
     self.v_pid = v_pid
-    self.vpid_flag = True
 
   def update(self, active, CS, long_plan, accel_limits, t_since_plan):
     """Update longitudinal control. This updates the state machine and runs a PID loop"""
@@ -148,12 +95,6 @@ class LongControl:
     self.pid.pos_limit = accel_limits[1]
 
     output_accel = self.last_output_accel
-
-    if self.vpid_flag:
-      self.v_pid = 0.0 #0.0
-      self.vpid_flag=False
-    dt=(time.time_ns()-self.t_ini)/1000000000.0 # Diferencial de tiempo en segundos
-
     self.long_control_state = long_control_state_trans(self.CP, active, self.long_control_state, CS.vEgo,
                                                        v_target, v_target_1sec, CS.brakePressed,
                                                        CS.cruiseState.standstill)
@@ -173,14 +114,12 @@ class LongControl:
       self.reset(CS.vEgo)
 
     elif self.long_control_state == LongCtrlState.pid:
+      self.v_pid = v_target_now
 
-      self.v_pid = self.vel_profile.update(dt)
-      
       # Toyota starts braking more when it thinks you want to stop
       # Freeze the integrator so we don't accelerate to compensate, and don't allow positive acceleration
       # TODO too complex, needs to be simplified and tested on toyotas
-      #prevent_overshoot = not self.CP.stoppingControl and CS.vEgo < 1.5 and v_target_1sec < 0.7 and v_target_1sec < self.v_pid
-      prevent_overshoot=False
+      prevent_overshoot = not self.CP.stoppingControl and CS.vEgo < 1.5 and v_target_1sec < 0.7 and v_target_1sec < self.v_pid
       deadzone = interp(CS.vEgo, self.CP.longitudinalTuning.deadzoneBP, self.CP.longitudinalTuning.deadzoneV)
       freeze_integrator = prevent_overshoot
 

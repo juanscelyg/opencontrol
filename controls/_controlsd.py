@@ -30,9 +30,6 @@ from selfdrive.locationd.calibrationd import Calibration
 from system.hardware import HARDWARE
 from selfdrive.manager.process_config import managed_processes
 
-from datetime import datetime
-import time
-
 SOFT_DISABLE_TIME = 3  # seconds
 LDW_MIN_SPEED = 31 * CV.MPH_TO_MS
 LANE_DEPARTURE_THRESHOLD = 0.1
@@ -839,7 +836,6 @@ class Controls:
     self.update_events(CS)
     cloudlog.timestamp("Events updated")
 
-    self.state_transition(CS)
     if not self.read_only and self.initialized:
       # Update control state
       self.state_transition(CS)
@@ -847,6 +843,7 @@ class Controls:
 
     # Compute actuators (runs PID loops and lateral MPC)
     CC, lac_log = self.state_control(CS)
+
     self.prof.checkpoint("State Control")
 
     # Publish data
@@ -854,30 +851,18 @@ class Controls:
     self.prof.checkpoint("Sent")
 
     self.CS_prev = CS
-    return CS, CC
-    
+
   def controlsd_thread(self):
-    KS = car.CarState.new_message()
-    KC = car.CarState.new_message()
-    t_ini = time.time_ns()
-    contador = 0
-    separator = "\t"
-    my_date = datetime.fromtimestamp(time.time())
-    doc = open("data_"+my_date.strftime("%Y%m%d_%H%M")+".txt",'a')
-    doc.write("Time: "+separator+"vEgo: "+separator+"hudControl setSpeed:"+separator+"LoC v_pid"+separator+"State"+"\n")
     while True:
-      KS, KC = self.step()
+      self.step()
       self.rk.monitor_time()
       self.prof.display()
-      if (contador%25) == 0:
-        dt=(time.time_ns()-t_ini)/1000000
-        #str_lB = ("1" if KS.leftBlinker else "0")
-        doc.write(str(dt)[:9]+separator+str(KS.vEgo)[:8]+separator+str(KC.hudControl.setSpeed)[:8]+separator+str(self.LoC.v_pid)[:8]+separator+str(self.LoC.long_control_state)[:8]+"\n")
-      contador = contador + 1 
+
 
 def main(sm=None, pm=None, logcan=None):
   controls = Controls(sm, pm, logcan)
   controls.controlsd_thread()
+
 
 if __name__ == "__main__":
   main()

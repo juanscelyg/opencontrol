@@ -1,12 +1,12 @@
-function [tiempo, v] = Trapezoidal(PT, dt, t0)
-global a;             % Aceleración
+function [tiempo, v] = Trapezoidal(TR, t0)
+global a dt v0;             % Aceleracion  y tiempo de muestreo
+v0 = v0/3.6;           % Velocidad inicial
+Vo = TR(1)/3.6;        % Velocidad objetivo  en m/s
+T = TR(2);             % tiempo de desarollo
 
- V = PT(1)/3.6;     % Velocidad en m/s
- T = PT(2);         % Tiempo del perfil
-TD = PT(3);         % Tiempo de descanso
-
-tau = V/a;
-tiempo = 0:dt:T+TD;
+tau = abs(Vo-v0)/a;    %Tiempo de aceleracion 
+acc = sign(Vo-v0)*a;
+tiempo = 0:dt:T;
 N = length(tiempo);
 v = tiempo-tiempo;
 
@@ -14,20 +14,14 @@ for k=1:N
  t = tiempo(k);  
     %Tramo-1
     if (t < tau)
-      v(k)= a*t; 
+      v(k) = v0 + acc*t; 
     
     %Tramo-2
-    elseif (t>=tau & t<=T-tau)
-      v(k) = V;
-
-    %Tramo-3
-    elseif (t>T-tau & t<=T)
-      v(k)= a*(T - t);
-
-    %Tramo-4
-    else
-      v(k)=0;
+    else (t>=tau & t<=T)
+      v(k) = Vo;
     end
+
 end
+v0 = 3.6*Vo;
 tiempo = tiempo + t0;
 end

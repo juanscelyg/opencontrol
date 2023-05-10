@@ -5,14 +5,13 @@ from common.conversions import Conversions as CV
 from common.numpy_fast import clip, interp
 from common.realtime import DT_MDL
 from selfdrive.modeld.constants import T_IDXS
-import time
 
 # WARNING: this value was determined based on the model's training distribution,
 #          model predictions above this speed can be unpredictable
-V_CRUISE_MAX = 80.0  # kph
-V_CRUISE_MIN = 0.0  # kph
-V_CRUISE_ENABLE_MIN = 0.0  # kph
-V_CRUISE_INITIAL = 5.0  # kph
+V_CRUISE_MAX = 145  # kph
+V_CRUISE_MIN = 8  # kph
+V_CRUISE_ENABLE_MIN = 40  # kph
+V_CRUISE_INITIAL = 255  # kph
 IMPERIAL_INCREMENT = 1.6  # should be CV.MPH_TO_KPH, but this causes rounding errors
 
 MIN_SPEED = 1.0
@@ -46,8 +45,6 @@ class VCruiseHelper:
     self.button_timers = {ButtonType.decelCruise: 0, ButtonType.accelCruise: 0}
     self.button_change_states = {btn: {"standstill": False, "enabled": False} for btn in self.button_timers}
 
-    self.flag=True
-
   @property
   def v_cruise_initialized(self):
     return self.v_cruise_kph != V_CRUISE_INITIAL
@@ -64,10 +61,6 @@ class VCruiseHelper:
       else:
         self.v_cruise_kph = CS.cruiseState.speed * CV.MS_TO_KPH
         self.v_cruise_cluster_kph = CS.cruiseState.speedCluster * CV.MS_TO_KPH
-      self.v_cruise_kph=V_CRUISE_MAX
-      if self.flag==True:
-        self.v_cruise_kph=V_CRUISE_MAX
-        self.flag=False
     else:
       self.v_cruise_kph = V_CRUISE_INITIAL
       self.v_cruise_cluster_kph = V_CRUISE_INITIAL
