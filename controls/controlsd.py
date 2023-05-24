@@ -857,14 +857,14 @@ class Controls:
     return CS, CC
     
   def controlsd_thread(self):
-    KS = car.CarState.new_message()
-    KC = car.CarState.new_message()
+    #KS = car.CarState.new_message()
+    #KC = car.CarState.new_message() # CarControl Struct
     t_ini = time.time_ns()
     contador = 0
     separator = "\t"
     my_date = datetime.fromtimestamp(time.time())
     doc = open("data_"+my_date.strftime("%Y%m%d_%H%M")+".txt",'a')
-    doc.write("Time: "+separator+"vEgo: "+separator+"hudControl setSpeed:"+separator+"LoC v_pid"+separator+"State"+"\n")
+    doc.write("Time: "+separator+"vEgo: "+separator+"hud_speed: "+separator+"v_pid: "+separator+"State: "+separator+"vEgo_raw: "+"\n")
     while True:
       KS, KC = self.step()
       self.rk.monitor_time()
@@ -872,7 +872,7 @@ class Controls:
       if (contador%25) == 0:
         dt=(time.time_ns()-t_ini)/1000000
         #str_lB = ("1" if KS.leftBlinker else "0")
-        doc.write(str(dt)[:9]+separator+str(KS.vEgo)[:8]+separator+str(KC.hudControl.setSpeed)[:8]+separator+str(self.LoC.v_pid)[:8]+separator+str(self.LoC.long_control_state)[:8]+"\n")
+        doc.write(str(dt)[:9]+separator+str(KS.vEgo)[:8]+separator+str(KC.hudControl.setSpeed)[:8]+separator+str(self.LoC.v_pid)[:8]+separator+str(self.LoC.long_control_state)[:8]+separator+str(KC.vEgoRaw)[:8]+"\n")
       contador = contador + 1 
 
 def main(sm=None, pm=None, logcan=None):

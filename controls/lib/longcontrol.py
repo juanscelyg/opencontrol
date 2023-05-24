@@ -67,6 +67,8 @@ class planner:
     # tipo: tipo de suavizado y transición entre velocidades
     def __init__(self,tipo):
         # --- Variables
+        self.enable = False
+        self.flag = True
         self.tipo = tipo
         self.vel_vector = []
         self.time_vector = []
@@ -85,11 +87,19 @@ class planner:
         self.stage = 0
         self.cont=1
         self.change_stage = False
+        self.t_ini = 0
         
     #time: tiempo actual de simulación en segundos
-    def update(self, time):  
-        if self.tipo==5:
-            vel=self.read_trapezoidal(time)
+    def update(self, t, CS):  
+        if CS.rightBlinker and self.flag:
+           self.enable = True # No usar el toogle
+           self.flag = False
+           self.t_ini = time.time_ns()/1000000000.0
+        else:
+           self.enable = False
+           self.flag = True
+        if self.tipo==5 and self.enable:
+            vel=self.read_trapezoidal(t-self.t_ini)
         else:
             vel=0.0
         return vel
@@ -152,7 +162,7 @@ class LongControl:
     if self.vpid_flag:
       self.v_pid = 0.0 #0.0
       self.vpid_flag=False
-    dt=(time.time_ns()-self.t_ini)/1000000000.0 # Diferencial de tiempo en segundos
+    dt_ini=(time.time_ns()-self.t_ini)/1000000000.0 # Diferencial de tiempo en segundos
 
     self.long_control_state = long_control_state_trans(self.CP, active, self.long_control_state, CS.vEgo,
                                                        v_target, v_target_1sec, CS.brakePressed,
@@ -174,7 +184,7 @@ class LongControl:
 
     elif self.long_control_state == LongCtrlState.pid:
 
-      self.v_pid = self.vel_profile.update(dt)
+      self.v_pid = self.vel_profile.update(dt_ini, CS)
       
       # Toyota starts braking more when it thinks you want to stop
       # Freeze the integrator so we don't accelerate to compensate, and don't allow positive acceleration

@@ -4,17 +4,18 @@
 % V: Velocidad objetivo en [km/h]
 % T: Tiempo de desarrollo [s]
 clear all
+close all
 global a dt v0;   % Aceleracion [m/s^2], tiempo de muestreo en [s] 
                   % Velocidad inicial en [km/h]
-a = 1; dt = 0.25;
+a = 0.5; dt = 0.25;
 
 v0=0; 
 TR1 = [v0 10]; 
-TR2 = [10 10];    
-TR3 = [0 20];   
-TR4 = [15 10];   
-TR5 = [30 20]; 
-TR6 = [0 10]; 
+TR2 = [15 30];    
+TR3 = [0 30];   
+TR4 = [25 30];   
+TR5 = [30 30]; 
+TR6 = [0 20]; 
 
 t0=0; 
 [t1 v1] = Trapezoidal(TR1, t0);
