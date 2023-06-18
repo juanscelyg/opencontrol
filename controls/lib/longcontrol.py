@@ -1,3 +1,4 @@
+import time
 from cereal import car
 from common.numpy_fast import clip, interp
 from common.realtime import DT_CTRL
@@ -7,14 +8,13 @@ from selfdrive.modeld.constants import T_IDXS
 
 LongCtrlState = car.CarControl.Actuators.LongControlState
 
-import time 
-
 LINEAL = 1
 TRAPEZOIDAL = 5
 REACTIVO = 9
 
+
 def long_control_state_trans(CP, active, long_control_state, v_ego, v_target,
-                             v_target_1sec, brake_pressed, cruise_standstill):
+                            v_target_1sec, brake_pressed, cruise_standstill):
   # Ignore cruise standstill if car has a gas interceptor
   cruise_standstill = cruise_standstill and not CP.enableGasInterceptor
   accelerating = v_target_1sec > v_target
@@ -23,7 +23,7 @@ def long_control_state_trans(CP, active, long_control_state, v_ego, v_target,
                   not accelerating)
   stay_stopped = (v_ego < CP.vEgoStopping and
                   (brake_pressed or cruise_standstill))
-  stopping_condition = False #planned_stop or stay_stopped
+  stopping_condition = False  # planned_stop or stay_stopped
 
   starting_condition = (v_target_1sec > CP.vEgoStarting and
                         accelerating and
@@ -54,79 +54,86 @@ def long_control_state_trans(CP, active, long_control_state, v_ego, v_target,
 
   return long_control_state
 
-class planner:
-    # vel_vector: vector de velocidades deseadas
-    # time_vector: vector de tiempos de cambio deseados
-    # tipo: tipo de suavizado y transición entre velocidades
-    def __init__(self,tipo):
-        # --- Variables
-        self.enable = False
-        self.flag = True
-        self.tipo = tipo
-        self.vel_vector = []
-        self.time_vector = []
-        self.separator=','
-        if self.tipo == 5:
-            self.archivo = '../controls/tests/perfil_trapezoidal.csv'
-            with open(self.archivo, 'r') as _archivo:
-                for linea in _archivo:
-                    linea = linea.rstrip()
-                    lista=linea.split(self.separator)
-                    self.time_vector.append(float(lista[0]))
-                    self.vel_vector.append(float(lista[1]))
-        # Velocidades y aceleraciones        
-        self.t_a = 10000.0
-        self.acc_max = 0.5
-        self.stage = 0
-        self.cont=1
-        self.change_stage = False
-        self.t_ini = 0
-        self.v_target = 5.5 # m/s
-        self.v_ini = 0.0
-        self.stopping = True
-        
-    #time: tiempo actual de simulación en segundos
-    def update(self, t, CS):  
-        if CS.rightBlinker and self.flag:
-           self.enable = True # No usar el toogle
-           self.flag = False
-           self.t_ini = t
-           self.cont=1
-           self.stopping = False
-        elif CS.leftBlinker and (not self.flag):
-           self.enable = False
-           self.flag = True
-           self.t_ini = t
-           self.cont=1
-           self.stopping = True
-        if self.tipo==TRAPEZOIDAL and self.enable:
-           vel=self.read_trapezoidal(t-self.t_ini)
-        elif self.tipo==REACTIVO:
-           vel=self.set_speed(t-self.t_ini, CS)
-        else:
-            vel=0.0
-        return vel, self.enable
 
-    #time: tiempo actual de simulación en segundos
-    def read_trapezoidal(self, t):
-        longitud=len(self.time_vector)
-        if t>self.time_vector[self.cont] and t<self.time_vector[longitud-1]:
-            self.cont+=1
-        return self.vel_vector[self.cont]
-    
-    def set_speed(self, t, CS):
-        if self.cont == 1:
-           self.v_ini = CS.vEgo
-        if self.stopping:
-           vel = self.v_ini - self. acc_max * t
+class planner:
+  # vel_vector: vector de velocidades deseadas
+  # time_vector: vector de tiempos de cambio deseados
+  # tipo: tipo de suavizado y transición entre velocidades
+  def __init__(self, tipo):
+    # --- Variables
+    self.perfil = 0
+    self.fase = 0
+    self.tipo = tipo
+    self.vel_vector = []
+    self.time_vector = []
+    self.separator = ','
+    if self.tipo == 5:
+      self.archivo = '../controls/tests/perfil_trapezoidal.csv'
+      with open(self.archivo, 'r') as _archivo:
+        for linea in _archivo:
+          linea = linea.rstrip()
+          lista = linea.split(self.separator)
+          self.time_vector.append(float(lista[0]))
+          self.vel_vector.append(float(lista[1]))
+    # Velocidades y aceleraciones
+    self.enable = False
+    self.t_a = 10000.0
+    self.acc_max = 0.5
+    self.stage = 0
+    self.cont = 1
+    self.change_stage = False
+    self.t_ini = (time.time_ns()-self.t_ini)/1000000000.0
+    self.v_target = 5.5  # m/s
+    self.v_ini = 0.0
+    self.t_1 = 0.0
+    self.t_2 = 0.0
+    self.tau = self.v_target/self.acc_max
+
+  # time: tiempo actual de simulación en segundos
+  def update(self, t, CS):
+    if CS.rightBlinker and self.perfil == 0:
+      self.enable = True
+      self.perfil = 1
+      self.fase = 1
+      self.t_1 = t
+    if CS.rightBlinker and self.fase == 0:
+      self.enable = True
+      self.fase = -1
+      self.t_2 = t
+    if CS.leftBlinker and self.perfil == 0:
+      self.enable = False
+    if self.tipo == TRAPEZOIDAL and self.enable:
+      vel = self.read_trapezoidal(t-self.t_ini)
+    elif self.tipo == REACTIVO and self.enable:
+      vel = self.set_speed(t-self.t_ini, CS)
+    else:
+      vel = 0.0
+    return vel, self.enable
+
+  # time: tiempo actual de simulación en segundos
+  def read_trapezoidal(self, t):
+    longitud = len(self.time_vector)
+    if t > self.time_vector[self.cont] and t < self.time_vector[longitud-1]:
+      self.cont += 1
+    return self.vel_vector[self.cont]
+
+  def set_speed(self, t, CS):
+    vel = CS.vEgo
+    if self.perfil == 1:
+      if self.fase == 1:
+        if (t-self.t_1 <= self.tau):
+          vel = self.acc_max*(t-self.t_1)
         else:
-           vel = self.v_ini + self. acc_max * t
-        if vel > self.v_target:
-           vel = self.v_target
-        elif vel < self.v_ini:
-           vel = self.v_ini
-        self.cont += 1
-        return vel
+          self.fase = 0
+      if self.fase == -1:
+        if (t-self.t_2 <= self.tau):
+          vel = self.v_target-self.acc_max*(t-self.t_2)
+    if vel > self.v_target:
+      vel = self.v_target
+    elif vel < self.v_ini:
+      vel = self.v_ini
+    self.cont += 1
+    return vel
 
 
 class LongControl:
@@ -134,13 +141,14 @@ class LongControl:
     self.CP = CP
     self.long_control_state = LongCtrlState.off  # initialized to off
     self.pid = PIDController((CP.longitudinalTuning.kpBP, CP.longitudinalTuning.kpV),
-                             (CP.longitudinalTuning.kiBP, CP.longitudinalTuning.kiV),
-                             k_f=CP.longitudinalTuning.kf, rate=1 / DT_CTRL)
-    self.v_pid = 0.0 
+                              (CP.longitudinalTuning.kiBP,
+                              CP.longitudinalTuning.kiV),
+                              k_f=CP.longitudinalTuning.kf, rate=1 / DT_CTRL)
+    self.v_pid = 0.0
     self.last_output_accel = 0.0
     self.vpid_flag = False
     self.t_ini = time.time_ns()
-    self.vel_profile = planner(REACTIVO) 
+    self.vel_profile = planner(REACTIVO)
 
   def reset(self, v_pid):
     """Reset PID controller and change setpoint"""
@@ -154,18 +162,24 @@ class LongControl:
     speeds = long_plan.speeds
     if len(speeds) == CONTROL_N:
       v_target_now = interp(t_since_plan, T_IDXS[:CONTROL_N], speeds)
-      a_target_now = interp(t_since_plan, T_IDXS[:CONTROL_N], long_plan.accels)
+      a_target_now = interp(
+          t_since_plan, T_IDXS[:CONTROL_N], long_plan.accels)
 
-      v_target_lower = interp(self.CP.longitudinalActuatorDelayLowerBound + t_since_plan, T_IDXS[:CONTROL_N], speeds)
-      a_target_lower = 2 * (v_target_lower - v_target_now) / self.CP.longitudinalActuatorDelayLowerBound - a_target_now
+      v_target_lower = interp(
+          self.CP.longitudinalActuatorDelayLowerBound + t_since_plan, T_IDXS[:CONTROL_N], speeds)
+      a_target_lower = 2 * (v_target_lower - v_target_now) / \
+          self.CP.longitudinalActuatorDelayLowerBound - a_target_now
 
-      v_target_upper = interp(self.CP.longitudinalActuatorDelayUpperBound + t_since_plan, T_IDXS[:CONTROL_N], speeds)
-      a_target_upper = 2 * (v_target_upper - v_target_now) / self.CP.longitudinalActuatorDelayUpperBound - a_target_now
+      v_target_upper = interp(
+          self.CP.longitudinalActuatorDelayUpperBound + t_since_plan, T_IDXS[:CONTROL_N], speeds)
+      a_target_upper = 2 * (v_target_upper - v_target_now) / \
+          self.CP.longitudinalActuatorDelayUpperBound - a_target_now
 
       v_target = min(v_target_lower, v_target_upper)
       a_target = min(a_target_lower, a_target_upper)
 
-      v_target_1sec = interp(self.CP.longitudinalActuatorDelayUpperBound + t_since_plan + 1.0, T_IDXS[:CONTROL_N], speeds)
+      v_target_1sec = interp(self.CP.longitudinalActuatorDelayUpperBound +
+                              t_since_plan + 1.0, T_IDXS[:CONTROL_N], speeds)
     else:
       v_target = 0.0
       v_target_now = 0.0
@@ -176,46 +190,49 @@ class LongControl:
     self.pid.pos_limit = accel_limits[1]
 
     output_accel = self.last_output_accel
-    dt_ini=(time.time_ns()-self.t_ini)/1000000000.0 # Diferencial de tiempo en segundos
-    
+    # Diferencial de tiempo en segundos
+    dt_ini = (time.time_ns()-self.t_ini)/1000000000.0
+
     self.long_control_state = long_control_state_trans(self.CP, active, self.long_control_state, CS.vEgo,
-                                                       v_target, v_target_1sec, CS.brakePressed,
-                                                       CS.cruiseState.standstill)
+                                                        v_target, v_target_1sec, CS.brakePressed,
+                                                        CS.cruiseState.standstill)
 
     if self.long_control_state == LongCtrlState.off:
-      self.reset(CS.vEgo, 0.0)
+      self.reset(CS.vEgo)
       output_accel = 0.
 
     elif self.long_control_state == LongCtrlState.stopping:
       if output_accel > self.CP.stopAccel:
         output_accel = min(output_accel, 0.0)
         output_accel -= self.CP.stoppingDecelRate * DT_CTRL
-      self.reset(CS.vEgo, 0.0)
+      self.reset(CS.vEgo)
 
     elif self.long_control_state == LongCtrlState.starting:
       output_accel = self.CP.startAccel
-      self.reset(CS.vEgo, 0.0)
+      self.reset(CS.vEgo)
 
     elif self.long_control_state == LongCtrlState.pid:
       v_pid, self.vpid_flag = self.vel_profile.update(dt_ini, CS)
       if self.vpid_flag:
-         self.v_pid = v_pid
+        self.v_pid = v_pid
       else:
-         self.v_pid = v_target_now
+        self.v_pid = v_target_now
 
       # Toyota starts braking more when it thinks you want to stop
       # Freeze the integrator so we don't accelerate to compensate, and don't allow positive acceleration
       # TODO too complex, needs to be simplified and tested on toyotas
       prevent_overshoot = not self.CP.stoppingControl and CS.vEgo < 1.5 and v_target_1sec < 0.7 and v_target_1sec < self.v_pid
-      deadzone = interp(CS.vEgo, self.CP.longitudinalTuning.deadzoneBP, self.CP.longitudinalTuning.deadzoneV)
+      deadzone = interp(CS.vEgo, self.CP.longitudinalTuning.deadzoneBP,
+                        self.CP.longitudinalTuning.deadzoneV)
       freeze_integrator = prevent_overshoot
 
       error = self.v_pid - CS.vEgo
       error_deadzone = apply_deadzone(error, deadzone)
       output_accel = self.pid.update(error_deadzone, speed=CS.vEgo,
-                                     feedforward=a_target,
-                                     freeze_integrator=freeze_integrator)
+                                      feedforward=a_target,
+                                      freeze_integrator=freeze_integrator)
 
-    self.last_output_accel = clip(output_accel, accel_limits[0], accel_limits[1])
+    self.last_output_accel = clip(
+        output_accel, accel_limits[0], accel_limits[1])
 
     return self.last_output_accel
